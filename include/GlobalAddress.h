@@ -9,9 +9,16 @@ public:
 
 union {
   struct {
-  uint64_t nodeID: 16;
-  uint64_t offset : 48;
+    uint64_t nodeID : 16;
+    uint64_t offset : 48;
   };
+  struct {
+    uint64_t rNType : 2;
+		uint64_t rNChar : 8;
+		uint64_t rNodeID : 6;
+    uint64_t rIsLeaf : 1;
+		uint64_t rOffset : 47;
+	};
   uint64_t val;
 };
 
@@ -26,6 +33,13 @@ union {
 } __attribute__((packed));
 
 static_assert(sizeof(GlobalAddress) == sizeof(uint64_t), "XXX");
+
+inline GlobalAddress toDSMAddr(GlobalAddress addr) {
+  addr.rNType = 0;
+  addr.rNChar = 0;
+  addr.rIsLeaf = 0;
+  return addr;
+}
 
 inline GlobalAddress GADD(const GlobalAddress &addr, int off) {
   auto ret = addr;

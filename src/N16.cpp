@@ -1,15 +1,17 @@
 #include "N.h"
 
 bool N16::insert(uint8_t key, GlobalAddress val) {
-  if (compactCount == 16) {
-    return false;
-  }
   assert(static_cast<NTypes>(val.rNType) == NTypes::N16);
   assert(val.rNChar == key);
-  entries[compactCount] = val;
-  compactCount++;
-  count++;
-  return true;
+  for (int i=0; i<16; i++) {
+    if (entries[i].pointer == GlobalAddress::Null()) {
+      entries[i].pointer = val;
+      entries[i].front_version = 0;
+      entries[i].rear_version = 0;
+      return true;
+    }
+  }
+  return false;
 }
 
 template <class NODE>
@@ -30,8 +32,8 @@ void N16::copyTo(NODE *n) const {
       break;
   }
   uint8_t key;
-  for (uint32_t i = 0; i < compactCount; ++i) {
-    GlobalAddress addr = entries[i];
+  for (uint32_t i = 0; i < 16; ++i) {
+    GlobalAddress addr = entries[i].pointer;
     if (addr != GlobalAddress::Null()) {
       addr.rNType = node_type;
       key = addr.rNChar;
@@ -40,23 +42,27 @@ void N16::copyTo(NODE *n) const {
   }
 }
 
-void N16::change(uint8_t key, GlobalAddress val) {
-  for (uint32_t i = 0; i < compactCount; ++i) {
-    GlobalAddress addr = entries[i];
-    if (addr != GlobalAddress::Null() && addr.rNChar == key) {
-      entries[i] = addr;
-      return;
-    }
-  }
-  assert(false);
+bool N16::check_consistent() {
+  return true;
 }
 
-GlobalAddress N16::getChild(const uint8_t k) const {
-  for (uint32_t i = 0; i < 16; i++) {
-    GlobalAddress addr = entries[i];
-    if (addr != GlobalAddress::Null() && addr.rNChar == k) {
-      return addr;
-    }
-  }
-  return GlobalAddress::Null();
-}
+// void N16::change(uint8_t key, GlobalAddress val) {
+//   for (uint32_t i = 0; i < compactCount; ++i) {
+//     GlobalAddress addr = entries[i];
+//     if (addr != GlobalAddress::Null() && addr.rNChar == key) {
+//       entries[i] = addr;
+//       return;
+//     }
+//   }
+//   assert(false);
+// }
+
+// GlobalAddress N16::getChild(const uint8_t k) const {
+//   for (uint32_t i = 0; i < 16; i++) {
+//     GlobalAddress addr = entries[i];
+//     if (addr != GlobalAddress::Null() && addr.rNChar == k) {
+//       return addr;
+//     }
+//   }
+//   return GlobalAddress::Null();
+// }

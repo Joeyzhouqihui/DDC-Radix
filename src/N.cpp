@@ -3,11 +3,7 @@
 #include <assert.h>
 
 void N::setType(NTypes type) {
-  typeVersionLockObsolete += convertTypeToVersion(type);
-}
-
-uint64_t N::convertTypeToVersion(NTypes type) {
-  return (static_cast<uint64_t>(type) << 62);
+  typeVersionLockObsolete += (static_cast<uint64_t>(type) << 62);
 }
 
 NTypes N::getType() const {
@@ -15,11 +11,24 @@ NTypes N::getType() const {
 }
 
 uint32_t N::getLevel() const {
-  return level;
+  return header.level;
 }
 
-uint32_t N::getCount() const {
-  return count;
+uint64_t N::getNodeSize(N *node) {
+  switch (node->getType()) {
+    case NTypes::N4: {
+      return sizeof(N4);
+    }
+    case NTypes::N16: {
+      return sizeof(N16);
+    }
+    case NTypes::N48: {
+      return sizeof(N48);
+    }
+    case NTypes::N256: {
+      return sizeof(N256);
+    }
+  }
 }
 
 bool N::isLocked() const {
@@ -60,19 +69,15 @@ GlobalAddress N::getChild(const uint8_t k, N *node) {
 }
 
 Prefix N::getPrefix() const {
-  return prefix;
+  return header.prefix;
 }
 
 void N::setPrefix(const uint8_t *prefix, uint32_t length) {
   if (length > 0) {
-    Prefix p;
-    memcpy(p.prefix, prefix, std::min(length, maxStoredPrefixLength));
-    p.prefixCount = length;
-    this->prefix = p;
+    memcpy(header.prefix.prefix, prefix, std::min(length, maxStoredPrefixLength));
+    header.prefix.prefixCount = length;
   } else {
-    Prefix p;
-    p.prefixCount = 0;
-    this->prefix = p;
+    header.prefix.prefixCount = 0;
   }
 }
 
@@ -92,3 +97,34 @@ GlobalAddress N::setLeaf(GlobalAddress tid) {
   return tid;
 }
 
+void N::set_consistent(N *node) {
+  node->header.front_version++;
+  node->header.rear_version = node->header.front_version;
+}
+
+bool N::check_consistent(N *node) {
+  bool success = 
+    node->header.front_version == node->header.rear_version;
+  if (!success) {
+    return false;
+  }
+  switch (node->getType()) {
+    case NTypes::N4: {
+      N4 *n = static_cast<N4*>(node);
+      return n->check_consistent();
+    }
+    case NTypes::N16: {
+      N16 *n = static_cast<N16*>(node);
+      return n->check_consistent();
+    }
+    case NTypes::N48: {
+      N48 *n = static_cast<N48*>(node);
+      return n->check_consistent();
+    }
+    case NTypes::N256: {
+      N256 *n = static_cast<N256*>(node);
+      return n->check_consistent();
+    }
+  }
+  return success;
+}

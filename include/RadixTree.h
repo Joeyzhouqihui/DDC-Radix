@@ -37,8 +37,11 @@ enum class PCEqualsResults : uint8_t {
 
 using LoadKeyFunction = void (*)(TID tid, Key &key);
 
-class RadixTree {
+const uint32_t KeyBytes = 8;
+const uint32_t ValueBytes = 8;
+const uint32_t KVBlockSize = KeyBytes + ValueBytes;
 
+class RadixTree {
 public:
   RadixTree(DSM *dsm);
   void insert(const Key &k, const Value &v, CoroContext *cxt = nullptr, int coro_id = 0);
@@ -56,6 +59,13 @@ private:
   //need modify
   void writeLockOrRestart(RdmaBuffer& rbuf, GlobalAddress addr, N *node, bool &needRestart, CoroContext *cxt);
   void writeUnlock(N *node, GlobalAddress addr, CoroContext *cxt);
+  void writeUnlockObsolete(N *node, GlobalAddress addr, CoroContext *cxt);
+  
+  bool insertNode(N *node, uint8_t key, GlobalAddress new_addr);
+  GlobalAddress searchNode(uint8_t key, N *node);
+  void changeNode(N *node, uint8_t key, GlobalAddress node_address);
+
+  void loadVarKey(RdmaBuffer& rbuf, GlobalAddress addr, VarKey &key, CoroContext *cxt);
 
   static CheckPrefixResult checkPrefix(N* n, const VarKey &k, uint32_t &level);
   static CheckPrefixPessimisticResult checkPrefixPessimistic(N *n, const VarKey &k, uint32_t &level,

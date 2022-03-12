@@ -23,33 +23,45 @@ struct Prefix {
 
 static_assert(sizeof(Prefix) == 8, "Prefix should be 64 bit long");
 
+struct Header {
+  uint8_t front_version;
+  Prefix prefix;
+  uint32_t level;
+  uint8_t rear_version;
+} __attribute__((packed));
+
 class N {
 public:
   N(NTypes type, uint32_t level, const uint8_t *prefix, uint32_t prefixLength) {
-    level = level;
+    header.front_version = 0;
+    header.level = level;
     setType(type);
     setPrefix(prefix, prefixLength);
+    header.rear_version = 0;
   }
 
   N(NTypes type, uint32_t level, const Prefix &prefix) : prefix(prefix), level(level) {
+    header.front_version = 0;
     setType(type);
+    header.rear_version = 0;
   }
 
   void setType(NTypes type);
-  static uint64_t convertTypeToVersion(NTypes type);
+  void setVersion(uint64_t version);
+  void setPrefix(const uint8_t *prefix, uint32_t length);
+  bool isLocked() const;
+  bool isObsolete() const;
   NTypes getType() const;
   uint32_t getLevel() const;
-  uint32_t getCount() const;
-  bool isLocked() const;
   uint64_t getVersion() const;
-  void setVersion(uint64_t version);
-  bool isObsolete() const;
-  static GlobalAddress getChild(const uint8_t k, N *node);
   Prefix getPrefix() const;
-  void setPrefix(const uint8_t *prefix, uint32_t length);
+  static uint64_t getNodeSize(N *node);
+  static GlobalAddress getChild(const uint8_t k, N *node);
   static GlobalAddress getLeaf(const GlobalAddress n);
   static bool isLeaf(const GlobalAddress n);
   static GlobalAddress setLeaf(GlobalAddress tid);
+  static void set_consistent(N *node);
+  static bool check_consistent(N *node);
 
 //differ local state change
   static void change(N *node, uint8_t key, N *val);
@@ -69,26 +81,32 @@ public:
   template<typename curN>
   static void insertCompact(curN *n, N *parentNode, uint8_t keyParent, uint8_t key, N *val, bool &needRestart);
 
-protected:
   uint64_t typeVersionLockObsolete{0};
-  Prefix prefix;
-  uint32_t level;
-  uint16_t count = 0;
-  uint16_t compactCount = 0;
+  Header header;
 
 } __attribute__((packed));
+
+struct NEntry {
+  uint8_t front_version;
+  GlobalAddress pointer;
+  uint8_t rear_version;
+};
 
 class N4 : public N {
 public:
   N4(uint32_t level, const uint8_t *prefix, uint32_t prefixLength) : N(NTypes::N4, level, prefix, prefixLength) {
     for (int i=0; i<4; i++) {
-      entries[i] = GlobalAddress::Null();
+      entries[i].front_version = 0;
+      entries[i].pointer = GlobalAddress::Null();
+      entries[i].rear_version = 0;
     }
   }
 
   N4(uint32_t level, const Prefix &prefix) : N(NTypes::N4, level, prefix) {
     for (int i=0; i<4; i++) {
-      entries[i] = GlobalAddress::Null();
+      entries[i].front_version = 0;
+      entries[i].pointer = GlobalAddress::Null();
+      entries[i].rear_version = 0;
     }
   }
 
@@ -97,8 +115,9 @@ public:
   void copyTo(NODE *n) const;
   void change(uint8_t key, GlobalAddress val);
   GlobalAddress getChild(const uint8_t k) const;
+  bool check_consistent();
 
-  GlobalAddress entries[4];
+  NEntry entries[4];
 
 };
 
@@ -106,13 +125,17 @@ class N16 : public N {
 public:
   N16(uint32_t level, const uint8_t *prefix, uint32_t prefixLength) : N(NTypes::N16, level, prefix, prefixLength) {
     for (int i=0; i<16; i++) {
-      entries[i] = GlobalAddress::Null();
+      entries[i].front_version = 0;
+      entries[i].pointer = GlobalAddress::Null();
+      entries[i].rear_version = 0;
     }
   }
 
   N16(uint32_t level, const Prefix &prefi) : N(NTypes::N16, level, prefi) {
     for (int i=0; i<16; i++) {
-      entries[i] = GlobalAddress::Null();
+      entries[i].front_version = 0;
+      entries[i].pointer = GlobalAddress::Null();
+      entries[i].rear_version = 0;
     }
   }
 
@@ -121,8 +144,9 @@ public:
   void copyTo(NODE *n) const;
   void change(uint8_t key, GlobalAddress val);
   GlobalAddress getChild(const uint8_t k) const;
+  bool check_consistent();
 
-  GlobalAddress entries[16];
+  NEntry entries[16];
 
 };
 
@@ -130,13 +154,17 @@ class N48 : public N {
 public:
   N48(uint32_t level, const uint8_t *prefix, uint32_t prefixLength) : N(NTypes::N48, level, prefix, prefixLength) {
     for (int i=0; i<48; i++) {
-      entries[i] = GlobalAddress::Null();
+      entries[i].front_version = 0;
+      entries[i].pointer = GlobalAddress::Null();
+      entries[i].rear_version = 0;
     }
   }
 
   N48(uint32_t level, const Prefix &prefi) : N(NTypes::N48, level, prefi) {
     for (int i=0; i<48; i++) {
-      entries[i] = GlobalAddress::Null();
+      entries[i].front_version = 0;
+      entries[i].pointer = GlobalAddress::Null();
+      entries[i].rear_version = 0;
     }    
   }
 
@@ -145,8 +173,9 @@ public:
   void copyTo(NODE *n) const;
   void change(uint8_t key, GlobalAddress val);
   GlobalAddress getChild(const uint8_t k) const;
+  bool check_consistent();
 
-  GlobalAddress entries[48];
+  NEntry entries[48];
 
 };
 
@@ -154,13 +183,17 @@ class N256 : public N {
 public:
   N256(uint32_t level, const uint8_t *prefix, uint32_t prefixLength) : N(NTypes::N256, level, prefix, prefixLength) {
     for (int i=0; i<256; i++) {
-      entries[i] = GlobalAddress::Null();
+      entries[i].front_version = 0;
+      entries[i].pointer = GlobalAddress::Null();
+      entries[i].rear_version = 0;
     }
   }
 
   N256(uint32_t level, const Prefix &prefi) : N(NTypes::N256, level, prefi) {
     for (int i=0; i<256; i++) {
-      entries[i] = GlobalAddress::Null();
+      entries[i].front_version = 0;
+      entries[i].pointer = GlobalAddress::Null();
+      entries[i].rear_version = 0;
     }
   }
 
@@ -169,8 +202,9 @@ public:
   void copyTo(NODE *n) const;
   void change(uint8_t key, GlobalAddress n);
   GlobalAddress getChild(const uint8_t k) const;
+  bool check_consistent();
 
-  GlobalAddress entries[256];
+  NEntry entries[256];
 
 };
 

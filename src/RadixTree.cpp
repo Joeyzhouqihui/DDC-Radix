@@ -105,7 +105,8 @@ GlobalAddress RadixTree::search(const VarKey &k, CoroContext *cxt = nullptr, int
         if (k.getKeyLen() <= level) {
           return GlobalAddress::Null();
         }
-        node_addr = N::getChild(k[level], node);
+        //node_addr = N::getChild(k[level], node);
+        node_addr = searchNode(k[level], node);
         if (node_addr == GlobalAddress::Null()) {
           return GlobalAddress::Null();
         }
@@ -118,6 +119,38 @@ GlobalAddress RadixTree::search(const VarKey &k, CoroContext *cxt = nullptr, int
     level++;
   }
 
+}
+
+GlobalAddress RadixTree::searchNode(uint8_t key, N *node) {
+  NTypes node_type = node->getType();
+  uint32_t num_entries;
+  NEntry *entries;
+  switch (node_type) {
+    case NTypes::N4:
+      num_entries = 4;
+      auto n = (N4*)node;
+      entries = n->entries;
+      break;
+    case NTypes::N16:
+      num_entries = 16;
+      auto n = (N16*)node;
+      entries = n->entries;
+      break;
+    case NTypes::N48:
+      num_entries = 48;
+      auto n = (N48*)node;
+      entries = n->entries;
+      break;
+    case NTypes::N256:
+      auto n = (N256 *)node;
+      return n->entries[key].pointer;
+  }
+  for (int i=0; i<num_entries; i++) {
+    if (entries[i].pointer.rNChar == key) {
+      return entries[i].pointer;
+    }
+  }
+  return GlobalAddress::Null();
 }
 
 void RadixTree::insert(const VarKey &k, GlobalAddress data_address, CoroContext *cxt = nullptr, int coro_id = 0) {
@@ -141,8 +174,10 @@ restart:
 
   while (true) {
     parentNode = node;
+    parent_node_addr = node_addr;
     parentKey = nodeKey;
     node = nextNode;
+    node_addr = next_node_addr;
 
     uint32_t nextLevel = level;
     uint8_t nonMatchingKey;
@@ -155,47 +190,216 @@ restart:
         lockVersionOrRestart(rbuf, node_addr, node, needRestart, cxt);
         if (needRestart) goto restart;
 
+        //what if parent is null?
+        writeLockOrRestart(rbuf, parent_node_addr, parentNode, needRestart, cxt);
+        if (needRestart) {
+          writeUnlock(node, node_addr, cxt);
+          goto restart;
+        }
+
         Prefix prefix = node->getPrefix();
         prefix.prefixCount = nextLevel - level;
         GlobalAddress new_node_addr = dsm->alloc(sizeof(N4));
+        new_node_addr.rIsLeaf = 0;
+        new_node_addr.rNChar = parentKey;
+        new_node_addr.rNType = static_cast<uint64_t>(NTypes::N4);
+
         auto new_node_buff = rbuf.get_sibling_buffer();
         auto new_node = new (new_node_buff) N4(nextLevel, prefix);
 
         new_node->insert(k[nextLevel], N::setLeaf(data_address));
         new_node->insert(nonMatchingKey, node_addr);
         
-        writeLockOrRestart(rbuf, parent_node_addr, parentNode, needRestart, cxt);
-        if (needRestart) {
-          writeUnlock(node, node_addr, cxt);
-          goto restart;
-        }
-        //todo N::change parent_node
-
-        write_node_sync(new_node, sizeof(N4), new_node_addr, cxt);
+        //node and parent node are locked
+        changeNode(parentNode, parentKey, new_node_addr);
+        node->setPrefix(remainingPrefix.prefix,
+                        node->getPrefix().prefixCount - ((nextLevel - level) + 1));
+        write_node_sync(node, N::getNodeSize(node), node_addr, cxt);
+        write_node_sync(new_node, N::getNodeSize(new_node), new_node_addr, cxt);
+        write_node_sync(parentNode, N::getNodeSize(parentNode), parent_node_addr, cxt);
+        writeUnlock(parentNode, parent_node_addr, cxt);
         writeUnlock(node, node_addr, cxt);
         return;
       }
       case CheckPrefixPessimisticResult::Match:
         break;
     }
+    //here to continue
     assert(nextLevel < k.getKeyLen());
     level = nextLevel;
     nodeKey = k[level];
-    next_node_addr = N::getChild(nodeKey, node);
+    next_node_addr = searchNode(nodeKey, node);
 
     if (next_node_addr == GlobalAddress::Null()) {
       lockVersionOrRestart(rbuf, node_addr, node, needRestart, cxt);
       if (needRestart) goto restart;
-      
+      if (!insertNode(node, nodeKey, data_address)) {
+        //node is full, need expand
+        writeLockOrRestart(rbuf, parent_node_addr, parentNode, needRestart, cxt);
+        if (needRestart) {
+          writeUnlock(node, node_addr, cxt);
+          goto restart;
+        }
+        GlobalAddress new_node_addr = GlobalAddress::Null();
+        N *new_node = nullptr;
+        switch (node->getType()) {
+          case NTypes::N4:
+            new_node_addr = dsm->alloc(sizeof(N16));
+            new_node_addr.rIsLeaf = 0;
+            new_node_addr.rNChar = parentKey;
+            new_node_addr.rNType = static_cast<uint64_t>(NTypes::N16);
+            auto new_node_buff = rbuf.get_sibling_buffer();
+            new_node = new (new_node_buff) N16(node->getLevel(), node->getPrefix());
+            auto n = (N4*)node;
+            n->copyTo(new_node);
+            break;
+          case NTypes::N16:
+            new_node_addr = dsm->alloc(sizeof(N48));
+            new_node_addr.rIsLeaf = 0;
+            new_node_addr.rNChar = parentKey;
+            new_node_addr.rNType = static_cast<uint64_t>(NTypes::N48);
+            auto new_node_buff = rbuf.get_sibling_buffer();
+            new_node = new (new_node_buff) N48(node->getLevel(), node->getPrefix());
+            auto n = (N16*)node;
+            n->copyTo(new_node);
+            break;
+          case NTypes::N48:
+            new_node_addr = dsm->alloc(sizeof(N256));
+            new_node_addr.rIsLeaf = 0;
+            new_node_addr.rNChar = parentKey;
+            new_node_addr.rNType = static_cast<uint64_t>(NTypes::N256);
+            auto new_node_buff = rbuf.get_sibling_buffer();
+            new_node = new (new_node_buff) N256(node->getLevel(), node->getPrefix());
+            auto n = (N48*)node;
+            n->copyTo(new_node);
+            break;
+          case NTypes::N256:
+            assert(false);
+            break;
+        }
+        changeNode(parentNode, parentKey, new_node_addr);
+        write_node_sync(new_node, N::getNodeSize(new_node), new_node_addr, cxt);
+        write_node_sync(parentNode, N::getNodeSize(parentNode), parent_node_addr, cxt);
+        writeUnlock(parentNode, parent_node_addr, cxt);
+        writeUnlockObsolete(node, node_addr, cxt);
+      } else {
+        writeUnlock(node, node_addr, cxt);
+      }
+      if (needRestart) goto restart;
+      return;
     }
 
-  }
+    if (N::isLeaf(next_node_addr)) {
+      lockVersionOrRestart(rbuf, node_addr, node, needRestart, cxt);
+      if (needRestart) goto restart;
 
+      VarKey key;
+      loadVarKey(rbuf, next_node_addr, key, cxt);
+
+      
+
+    }
+    level++;
+  }
+}
+
+void RadixTree::loadVarKey(RdmaBuffer& rbuf, GlobalAddress addr, VarKey &key, CoroContext *cxt) {
+  auto page_buffer = rbuf.get_page_buffer();
+  addr = toDSMAddr(addr);
+  dsm->read_sync(page_buffer, addr, KVBlockSize, cxt);
+  key.set((char*)page_buffer, KeyBytes);
+}
+
+void RadixTree::writeUnlockObsolete(N *node, GlobalAddress addr, CoroContext *cxt) {
+  uint64_t version = node->getVersion();
+  version = version + 0b11; //unlock and inc version
+  addr = toDSMAddr(addr);
+  dsm->write_sync((char *)version, addr, sizeof(uint64_t), cxt);
+}
+
+bool RadixTree::insertNode(N *node, uint8_t key, GlobalAddress new_addr) {
+  switch (node->getType()) {
+    case NTypes::N4: {
+      auto n = static_cast<N4 *>(node);
+      for (int i=0; i<4; i++) {
+        if (n->entries[i].pointer == GlobalAddress::Null()) {
+          n->entries[i].pointer = N::setLeaf(new_addr);
+          return true;
+        }
+      }
+      break;
+    }
+    case NTypes::N16: {
+      auto n = static_cast<N16 *>(node);
+      for (int i=0; i<16; i++) {
+        if (n->entries[i].pointer == GlobalAddress::Null()) {
+          n->entries[i].pointer = N::setLeaf(new_addr);
+          return true;
+        }
+      }
+      break;
+    }
+    case NTypes::N48: {
+      auto n = static_cast<N48 *>(node);
+      for (int i=0; i<48; i++) {
+        if (n->entries[i].pointer == GlobalAddress::Null()) {
+          n->entries[i].pointer = N::setLeaf(new_addr);
+          return true;
+        }
+      }
+      break;
+    }
+    case NTypes::N256: {
+      auto n = static_cast<N256 *>(node);
+      n->entries[key].pointer = N::setLeaf(new_addr);
+      return true;
+    }
+  }
+  return false;
+}
+
+void RadixTree::changeNode(N *node, uint8_t key, GlobalAddress new_node_addr) {
+  NTypes node_type = node->getType();
+  uint32_t num_entries;
+  NEntry *entries;
+  switch (node_type) {
+    case NTypes::N4:
+      num_entries = 4;
+      auto n = (N4*)node;
+      entries = n->entries;
+      break;
+    case NTypes::N16:
+      num_entries = 16;
+      auto n = (N16*)node;
+      entries = n->entries;
+      break;
+    case NTypes::N48:
+      num_entries = 48;
+      auto n = (N48*)node;
+      entries = n->entries;
+      break;
+    case NTypes::N256:
+      auto n = (N256 *)node;
+      n->entries[key].front_version++;
+      n->entries[key].pointer = new_node_addr;
+      n->entries[key].rear_version = n->entries[key].front_version;
+      return;
+  }
+  for (int i=0; i<num_entries; i++) {
+    if (entries[i].pointer.rNChar == key) {
+      entries[i].front_version++;
+      entries[i].pointer = new_node_addr;
+      entries[i].rear_version = entries[i].front_version;
+      return;
+    }
+  }
+  assert(false);
 }
 
 void RadixTree::writeUnlock(N *node, GlobalAddress addr, CoroContext *cxt) {
   uint64_t version = node->getVersion();
-  version = version & 0b00;
+  version = version + 0b10; //unlock and inc version
+  addr = toDSMAddr(addr);
   dsm->write_sync((char *)version, addr, sizeof(uint64_t), cxt);
 }
 
@@ -204,7 +408,7 @@ void RadixTree::write_node_sync(N *node, uint64_t size, GlobalAddress addr, Coro
 }
 
 void RadixTree::writeLockOrRestart(RdmaBuffer& rbuf, GlobalAddress addr, N *node, bool &needRestart, CoroContext *cxt) {
-  uint64_t *cas_buf = rbuf.get_cas_buffer();
+  auto cas_buf = rbuf.get_cas_buffer();
   uint64_t tag;// = node->getVersion() & 0b10;
   addr = toDSMAddr(addr);
   do {
@@ -216,7 +420,9 @@ void RadixTree::writeLockOrRestart(RdmaBuffer& rbuf, GlobalAddress addr, N *node
       needRestart = true;
       return;
     }
+    tag = node->getVersion() + 0b10;
   } while (!dsm->cas_dm_sync(addr, node->getVersion(), tag, cas_buf, cxt));
+  node->setVersion(tag);
 }
 
 GlobalAddress RadixTree::to_embedded_address(GlobalAddress origin_address, uint8_t key, NTypes node_type) {
@@ -232,9 +438,13 @@ void RadixTree::lockVersionOrRestart(RdmaBuffer& rbuf, GlobalAddress addr, N *no
     return;
   }
   uint64_t *cas_buf = rbuf.get_cas_buffer();
-  uint64_t tag = node->getVersion() & 0b10;
+  uint64_t tag = node->getVersion() + 0b10;
   addr = toDSMAddr(addr);
-  needRestart = !dsm->cas_dm_sync(addr, node->getVersion(), tag, cas_buf, cxt);
+  if (dsm->cas_dm_sync(addr, node->getVersion(), tag, cas_buf, cxt)) {
+    node->setVersion(tag);
+  } else {
+    needRestart = true;
+  }
 }
 
 N* RadixTree::read_node_sync(RdmaBuffer& rbuf, GlobalAddress addr, CoroContext *cxt) {
@@ -256,8 +466,15 @@ N* RadixTree::read_node_sync(RdmaBuffer& rbuf, GlobalAddress addr, CoroContext *
       break;
   }
   addr = toDSMAddr(addr);
-  dsm->read_sync(page_buffer, addr, read_size, cxt);
-  return (N *)page_buffer;
+  N *tmp;
+  while (true) {
+    dsm->read_sync(page_buffer, addr, read_size, cxt);
+    tmp = (N *)page_buffer;
+    if (N::check_consistent(tmp)) {
+      break;
+    }
+  }
+  return tmp;
 }
 
 CheckPrefixResult RadixTree::checkPrefix(N *n, const VarKey &k, uint32_t &level) {

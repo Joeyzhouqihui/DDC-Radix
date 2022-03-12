@@ -13,7 +13,7 @@ public:
   ~VarKey();
   VarKey(const VarKey &key) = delete;
   VarKey(VarKey &&key);
-  void set(const char bytes[], const std::size_t length);
+  void set(char bytes[], const std::size_t length);
   void operator=(const char key[]);
   bool operator==(const VarKey &k) const;
   uint8_t &operator[](std::size_t i);
@@ -47,7 +47,7 @@ inline VarKey::VarKey(VarKey &&key) {
   }
 }
 
-inline void VarKey::set(const char bytes[], const std::size_t length) {
+inline void VarKey::set(char bytes[], const std::size_t length) {
   if (len > stackLen) {
     delete[] data;
   }

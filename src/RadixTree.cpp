@@ -296,8 +296,29 @@ restart:
       VarKey key;
       loadVarKey(rbuf, next_node_addr, key, cxt);
 
-      
+      level++;
+      assert(level < key.getKeyLen());
+      uint32_t prefixLength = 0;
+      while (key[level + prefixLength] == k[level + prefixLength]) {
+        prefixLength++;
+      }
 
+      GlobalAddress new_node_addr = dsm->alloc(sizeof(N4));
+      new_node_addr.rIsLeaf = 0;
+      new_node_addr.rNChar = parentKey;
+      new_node_addr.rNType = static_cast<uint64_t>(NTypes::N4);
+
+      auto new_node_buff = rbuf.get_sibling_buffer();
+      auto new_node = new (new_node_buff) N4(level + prefixLength, &k[level], prefixLength);
+
+      insertNode(new_node, k[level + prefixLength], N::setLeaf(data_address));
+      insertNode(new_node, key[level + prefixLength], next_node_addr);
+      changeNode(node, k[level - 1], new_node_addr);
+
+      write_node_sync(new_node, sizeof(N4), new_node_addr, cxt);
+      write_node_sync(node, sizeof(node), node_addr, cxt);
+      writeUnlock(node, node_addr, cxt);
+      return;
     }
     level++;
   }

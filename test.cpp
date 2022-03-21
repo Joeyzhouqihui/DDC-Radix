@@ -37,8 +37,8 @@ union {
     uint64_t offset : 48;
   };
   struct {
+    uint64_t rNChar : 8;
     uint64_t rNType : 2;
-		uint64_t rNChar : 8;
 		uint64_t rNodeID : 6;
     uint64_t rIsLeaf : 1;
 		uint64_t rOffset : 47;
@@ -66,25 +66,13 @@ enum class NTypes : uint8_t {
 int main() {
   uint64_t bit_mask = 0x0000800000000000;
   GlobalAddress n_addr;
-  n_addr.val = reinterpret_cast<uint64_t>(bit_mask);
-  n_addr.rNType = 1;
-  for (int i=0; i<4; i++) {
-    n_addr.rNType = i;
-    switch (i) {
-      case 0:
-        assert((uint8_t)n_addr.rNType == (uint8_t)NTypes::N4);
-        
-        break;
-      case 1:
-        assert((uint8_t)n_addr.rNType == (uint8_t)NTypes::N16);
-        break;
-      case 2:
-        assert((uint8_t)n_addr.rNType == (uint8_t)NTypes::N48);
-        break;
-      case 3:
-        assert((uint8_t)n_addr.rNType == (uint8_t)NTypes::N256);
-        break;
-    };
-  }
+  n_addr.val = 0;
+  n_addr.rNChar = 12;
+  printf("%ld\n", n_addr.rNChar);
+  n_addr.rNType = static_cast<uint64_t>(NTypes::N256);
+  n_addr.rNodeID = 0;
+  NTypes type = NTypes::N256;
+  uint64_t v = static_cast<uint64_t>(type) << 62;
+  printf("%lu\n", v);
 	return 0;
 }

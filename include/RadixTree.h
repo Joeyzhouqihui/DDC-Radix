@@ -48,6 +48,8 @@ public:
   bool search(const Key &k, Value &v, CoroContext *cxt = nullptr, int coro_id = 0);
   void insert(const VarKey &k, GlobalAddress tid, CoroContext *cxt = nullptr, int coro_id = 0);
   GlobalAddress search(const VarKey &k, CoroContext *cxt = nullptr, int coro_id = 0);
+  GlobalAddress store(const VarKey &k, const uint64_t &v, CoroContext *cxt = nullptr, int coro_id = 0);
+  uint64_t load(const VarKey &k, const GlobalAddress &kv_addr, CoroContext *cxt = nullptr, int coro_id = 0);
 
 private:
   GlobalAddress get_root_ptr_ptr();
@@ -61,7 +63,7 @@ private:
   void writeUnlock(N *node, GlobalAddress addr, CoroContext *cxt);
   void writeUnlockObsolete(N *node, GlobalAddress addr, CoroContext *cxt);
   
-  bool insertNode(N *node, uint8_t key, GlobalAddress new_addr);
+  char* insertNode(N *node, uint8_t key, GlobalAddress new_addr);
   GlobalAddress searchNode(uint8_t key, N *node);
   void changeNode(N *node, uint8_t key, GlobalAddress node_address);
 

@@ -1,4 +1,8 @@
 #include "N.h"
+#include "N4.cpp"
+#include "N16.cpp"
+#include "N48.cpp"
+#include "N256.cpp"
 #include <algorithm>
 #include <assert.h>
 
@@ -45,27 +49,6 @@ void N::setVersion(uint64_t version) {
 
 bool N::isObsolete() const {
   return (typeVersionLockObsolete & 1) == 1;
-}
-
-GlobalAddress N::getChild(const uint8_t k, N *node) {
-  switch (node->getType()) {
-    case NTypes::N4: {
-      auto n = static_cast<N4*>(node);
-      return n->getChild(k);
-    }
-    case NTypes::N16: {
-      auto n = static_cast<N16*>(node);
-      return n->getChild(k);
-    }
-    case NTypes::N48: {
-      auto n = static_cast<N48*>(node);
-      return n->getChild(k);
-    }
-    case NTypes::N256: {
-      auto n = static_cast<N256*>(node);
-      return n->getChild(k);
-    }
-  }
 }
 
 Prefix N::getPrefix() const {

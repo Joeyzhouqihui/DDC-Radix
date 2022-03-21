@@ -13,9 +13,9 @@ union {
     uint64_t offset : 48;
   };
   struct {
+    uint64_t rNodeID : 6;
     uint64_t rNType : 2;
-		uint64_t rNChar : 8;
-		uint64_t rNodeID : 6;
+    uint64_t rNChar : 8;
     uint64_t rIsLeaf : 1;
 		uint64_t rOffset : 47;
 	};

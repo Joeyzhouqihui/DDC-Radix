@@ -21,7 +21,6 @@ public:
   KeyLen getKeyLen() const;
   void setKeyLen(KeyLen len);
 
-private:
   static constexpr uint32_t stackLen = 128;
   uint32_t len = 0;
   uint8_t *data;

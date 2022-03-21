@@ -1,5 +1,6 @@
 #include "DSM.h"
 #include "RadixTree.h"
+#include <stdio.h>
 //#include "Tree.h"
 
 int main() {
@@ -7,21 +8,20 @@ int main() {
   DSMConfig config;
   config.machineNR = 1;
   DSM *dsm = DSM::getInstance(config);
- 
   dsm->registerThread();
 
+  printf("env set up complete\n");
+
   auto radix_tree = new RadixTree(dsm);
-  Value v;
-
-  for (int i=0; i<5; i++) {
-    radix_tree->insert(i, 1235467);
-  }
-
-  for (int i=0; i<4; i++) {
-    radix_tree->search(i, v);
-    std::cout<<v<<std::endl;
-  }
-
+  VarKey key;
+  key.set("qhzhou", 6);
+  uint32_t value = 100;
+  GlobalAddress kv_addr = radix_tree->store(key, value);
+  radix_tree->insert(key, kv_addr);
+  
+  GlobalAddress return_kv_addr = radix_tree->search(key);
+  uint64_t return_value = radix_tree->load(key, return_kv_addr);
+  printf("return value: %ld\n", return_value);
   // auto tree = new Tree(dsm);
 
   // Value v;

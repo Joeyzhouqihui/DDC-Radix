@@ -16,26 +16,12 @@ bool N48::insert(uint8_t key, GlobalAddress val) {
 
 template <class NODE>
 void N48::copyTo(NODE *n) const {
-  NTypes node_type;
-  switch (NODE) {
-    case N4:
-      node_type = NTypes::N4;
-      break;
-    case N16:
-      node_type = NTypes::N16;
-      break;
-    case N48:
-      node_type = NTypes::N48;
-      break;
-    case N256:
-      node_type = NTypes::N256;
-      break;
-  }
+  NTypes node_type = n->getType();
   uint8_t key;
   for (uint32_t i = 0; i < 48; ++i) {
     GlobalAddress addr = entries[i].pointer;
     if (addr != GlobalAddress::Null()) {
-      addr.rNType = node_type;
+      addr.rNType = static_cast<uint64_t>(node_type);
       key = addr.rNChar;
       n->insert(key, addr);
     }

@@ -5,8 +5,8 @@ project(Sherman)
 # set (CMAKE_CXX_COMPILER ${CMAKE_C_COMPILER})
 
 #Compiler options
-# set(CMAKE_C_FLAGS "-Wall -Wno-deprecated-declarations -Wsign-compare -DNDEBUG -g")
-set(CMAKE_C_FLAGS "-Wall -Wno-deprecated-declarations -Wsign-compare -O3 -g")
+set(CMAKE_C_FLAGS "-Wall -Wno-deprecated-declarations -Wsign-compare -DNDEBUG -g")
+# set(CMAKE_C_FLAGS "-Wall -Wno-deprecated-declarations -Wsign-compare -O3 -g")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11 ")
 
 # Link Options
@@ -17,7 +17,7 @@ set(LINKS_FLAGS "-lcityhash -lboost_system -lboost_coroutine -lpthread -libverbs
     # set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
 # endif()
 
-set(INCLUDE_BASE ${PROJECT_SOURCE_DIR}/include)
+set(INCLUDE_BASE ${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/src)
 include_directories(${INCLUDE_BASE})
 
 #Source file define

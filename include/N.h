@@ -33,6 +33,7 @@ struct Header {
 class N {
 public:
   N(NTypes type, uint32_t level, const uint8_t *prefix, uint32_t prefixLength) {
+    typeVersionLockObsolete = 0;
     header.front_version = 0;
     header.level = level;
     setType(type);
@@ -40,9 +41,12 @@ public:
     header.rear_version = 0;
   }
 
-  N(NTypes type, uint32_t level, const Prefix &prefix) : prefix(prefix), level(level) {
+  N(NTypes type, uint32_t level, const Prefix &prefix) {
+    typeVersionLockObsolete = 0;
     header.front_version = 0;
+    header.level = level;
     setType(type);
+    memcpy((char*)&header.prefix, (char*)&prefix, sizeof(Prefix));
     header.rear_version = 0;
   }
 
@@ -81,7 +85,7 @@ public:
   template<typename curN>
   static void insertCompact(curN *n, N *parentNode, uint8_t keyParent, uint8_t key, N *val, bool &needRestart);
 
-  uint64_t typeVersionLockObsolete{0};
+  uint64_t typeVersionLockObsolete;
   Header header;
 
 } __attribute__((packed));
